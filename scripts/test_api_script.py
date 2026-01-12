@@ -88,7 +88,25 @@ def upload_chart() -> dict:
     :return: The API response.
     :rtype: dict
     """
-    pass
+    # 1. Transform the local data/medical_chart.txt into a JSON-compatible dict
+    # This calls the parser we implemented previously.
+    chart_json = transform_chart_to_json()
+    
+    if "error" in chart_json:
+        return chart_json
+
+    # 2. Define the hardcoded endpoint URL
+    url = "http://127.0.0.1:8000/app/upload-chart"
+    
+    try:
+        # 3. Send the POST request with the JSON payload
+        response = requests.post(url, json=chart_json)
+        response.raise_for_status()
+        
+        # This will return the {"message": "...", "count": ...} object defined in your view
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": f"API Upload failed: {e}"}
 
 def list_charts() -> dict:
     """
@@ -97,7 +115,15 @@ def list_charts() -> dict:
     :return: The API response.
     :rtype: dict
     """
-    pass
+    # We assume the Django server is running on the default local address
+    url = "http://127.0.0.1:8000/app/charts"
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raises an error for bad status codes
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Failed to retrieve charts: {e}"}
 
 def code_chart() -> dict:
     """

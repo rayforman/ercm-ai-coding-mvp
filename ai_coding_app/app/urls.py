@@ -13,6 +13,6 @@ urlpatterns = [
 
     path("chart-schema", ChartSchemaView.as_view(), name="chart-schema"),
     path("upload-chart", UploadChartView.as_view(), name="upload-chart"),
-    path("charts-view", ListChartsView.as_view(), name="charts"),
+    path("charts", ListChartsView.as_view(), name="charts"),
 
 ]
