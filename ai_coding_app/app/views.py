@@ -3,7 +3,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
-from .models import TestModel, MedicalChart, Note
+from .models import TestModel, MedicalChart, Note, ICD10Code, CodeAssignment
+
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+
+from dotenv import load_dotenv
+load_dotenv()
 
 #### #! DO NOT MODIFY THIS CODE #! ####
 
@@ -105,7 +111,7 @@ class ListChartsView(APIView):
         Retrieve all charts stored in the database.
 
         :param request: The HTTP request object.
-        
+
         :return: A JSON response containing all chart records.
         :rtype: Response
         """
@@ -124,3 +130,89 @@ class ListChartsView(APIView):
                 ]
             })
         return Response(output, status=status.HTTP_200_OK)
+    
+class CodeChartView(APIView):
+    """
+    API view to perform semantic coding on a medical chart and store results. 
+    """
+
+    def post(self, request: Request) -> Response:
+        """
+        Ascribes ICD-10 codes to each note in a specified chart. 
+
+        :param request: Request object containing 'external_chart_id' and 'save' (bool).
+        :return: JSON list of assigned codes and their similarity scores.
+        """
+        chart_id = request.data.get('external_chart_id')
+        save_to_db = request.data.get('save', False)    # default = False
+
+        # 1. Fetch notes from SQLite for this chart 
+        try:
+            chart = MedicalChart.objects.get(external_chart_id=chart_id)
+            notes = Note.objects.filter(chart=chart) # 
+        except MedicalChart.DoesNotExist:
+            return Response({"error": "Chart not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # 2. Setup Vector Store Connection
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        vector_db = Chroma(persist_directory="data/chroma_db", embedding_function=embeddings)
+
+        results = []
+
+        # 3. Process each note 
+        for note in notes:
+            # Layer 1: Find Top Cluster 
+            cluster_matches = vector_db.similarity_search(
+                note.content, 
+                k=1, 
+                filter={"type": "cluster_header"}
+            )
+            
+            if not cluster_matches:
+                continue # Skip or handle error if no cluster found
+
+            top_cluster_id = cluster_matches[0].metadata['cluster_id']
+
+            # Layer 2: Find Specific Code within that cluster
+            code_matches = vector_db.similarity_search_with_relevance_scores(
+                note.content, 
+                k=1, 
+                filter={
+                    "$and": [
+                        {"cluster_id": {"$eq": top_cluster_id}},
+                        {"type": {"$eq": "specific_code"}}
+                    ]
+                }
+            )
+            
+            if not code_matches:
+                continue
+            
+            top_doc, raw_score = code_matches[0]
+            # Linear shift: Maps -1 to 0 and 1 to 1. Eliminates negatives scores. 
+            # This keeps the clinical signal perfectly intact while making it "pretty"
+            normalized_score = (raw_score + 1) / 2
+            score = round(normalized_score, 4)
+            icd_code_val = top_doc.metadata['code'] # extract code
+
+            # 4. Persistence (if save=True)
+            if save_to_db:
+                # Ensure the code exists in our ICD10Code table first
+                icd_obj, _ = ICD10Code.objects.get_or_create(
+                    code=icd_code_val,
+                    defaults={'description': top_doc.page_content}
+                )
+                # Create the assignment
+                CodeAssignment.objects.create(
+                    note=note,
+                    icd10_code=icd_obj,
+                    similarity_score=score
+                )
+
+            results.append({
+                "note_id": note.note_id,
+                "icd_code": icd_code_val,
+                "similarity_score": score
+            })
+
+        return Response(results, status=status.HTTP_200_OK)

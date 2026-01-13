@@ -132,7 +132,18 @@ def code_chart() -> dict:
     :return: The API response.
     :rtype: dict
     """
-    pass
+    url = "http://127.0.0.1:8000/app/code-chart"
+    payload = {
+        "external_chart_id": "case12", # Derived from your transformation logic
+        "save": True
+    }
+    
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Coding failed: {e}"}
 
 
 #### #! DO NOT MODIFY THIS CODE #! ####

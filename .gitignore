@@ -47,3 +47,8 @@ cdk.out
 
 # Keys
 *.pem
+
+# Submission additions
+data/chroma_db/
+*.sqlite3
+.env
