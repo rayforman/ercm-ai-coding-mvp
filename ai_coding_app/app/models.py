@@ -111,3 +111,75 @@ class Note(models.Model):
             'title': self.title,
             'content': self.content,
         }
+
+class ICD10Code(models.Model):
+    """
+    Represents an ICD-10 diagnosis code from category G.
+
+    Attributes:
+        code (str): The unique ICD-10 code (e.g., 'G40.909')
+        description (str): The long description used for embedding
+    """
+    code = models.CharField(max_length=10, unique=True)
+    description = models.TextField()
+
+    def __str__(self):
+        f"""
+        Return the string representation of the model instance.
+
+        :return: The string representation of the model instance.
+        :rtype: str
+        """
+        return f"{self.code}: {self.description[:30]}"
+    
+    def to_dict(self) -> dict:
+        f"""
+        Convert the model instance to a dictionary for JSON serialization.
+
+        :return: The dictionary representation of the model instance.
+        :rtype: dict
+        """
+        return {
+            'chart': self.chart,
+            'note_id': self.note_id,
+            'title': self.title,
+            'content': self.content,
+        }
+
+class CodeAssignment(models.Model):
+    """
+    Captures the many-to-many relationship between notes and ICD-10 codes.
+
+    Attributes:
+        note (Note): The specific note from the chart[cite: 157].
+        icd10_code (ICD10Code): The assigned diagnosis code[cite: 154].
+        similarity_score (float): Score from the semantic search[cite: 158].
+        assigned_at (datetime): Timestamp of when the record was created[cite: 159].
+    """
+    note = models.ForeignKey('Note', on_delete=models.CASCADE)
+    icd10_code = models.ForeignKey(ICD10Code, on_delete=models.CASCADE)
+    similarity_score = models.FloatField()
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        f"""
+        Return the string representation of the model instance.
+
+        :return: The string representation of the model instance.
+        :rtype: str
+        """
+        return f"{self.note.note_id} -> {self.icd10_code.code}"
+    
+    def to_dict(self) -> dict:
+        f"""
+        Convert the model instance to a dictionary for JSON serialization.
+
+        :return: The dictionary representation of the model instance.
+        :rtype: dict
+        """
+        return {
+            'note_id': self.note.node_id,
+            'icd10_code': self.icd10_code.code,
+            'similarity_score': self.similarity_score,
+            'assigned_at': self.assigned_at,
+        }
